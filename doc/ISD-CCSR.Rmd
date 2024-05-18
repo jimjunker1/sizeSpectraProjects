@@ -1,0 +1,207 @@
+---
+author: Jim Junker
+date: '`r format(Sys.Date())`'
+title: ISD-CCSR comparison
+output: html_document
+---
+
+```{r init, echo = FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+here::i_am("doc/ISD-CCSR.Rmd")
+```
+
+
+## Purpose
+
+Start the initial analysis combining ISD, CCSR, and LSD relationships across the NEON sites
+
+```{r load data}
+library(here)
+library(tidyverse)
+library(tidybayes)
+library(ggdist)
+library(modelr)
+library(rstan)
+library(brms)
+library(viridis)
+library(mgcv)
+theme_set(theme_minimal())
+
+# read in data and calc sample level summaries
+dw_dat = readRDS(here("./data/dat_fish_inverts_dw_allyears.rds")) %>% 
+  group_by(site_id, sample_id) %>% 
+  mutate(n_sum = sum(no_m2),
+         n_rel = no_m2/n_sum,
+         b_m2 = no_m2*dw,
+         b_sum = sum(b_m2),
+         b_rel = b_m2/b_sum) 
+
+# get weighted mean body size
+dw_dat_summ = dw_dat %>% 
+  group_by(site_id, sample_id) %>% 
+  summarise(n_tot = sum(n_sum),
+            ln_tot = log10(n_tot),
+            mbar_n = weighted.mean(dw, w = n_rel),
+            mbar_b = weighted.mean(dw, w = b_rel),
+            lmbar_n = log10(mbar_n),
+            lmbar_b = log10(mbar_b),
+            b_m2 = unique(b_sum))%>% 
+  ungroup %>% 
+  left_join(dw_dat %>% ungroup %>% select(site_id, gpp, log_gpp_s, log_om_s, mat_s) %>% distinct(), by = 'site_id')
+
+```
+
+```{r models}
+## calculate the bayesian linear regression
+
+N_M_nwt = brm(bf(ln_tot~lmbar_n),
+              data = dw_dat_summ,
+              family = gaussian(link = 'identity'),
+              iter = 1000,
+              thin = 1,
+              file_refit = 'on_change',
+              file = here("data/models/N_M_nwt")
+              )
+
+N_M_nwt_lm = lm(log10(n_tot)~log10(mbar_n), data = dw_dat_summ)
+
+summary(N_M_nwt_lm)
+
+
+N_M_bwt = brm(bf(ln_tot~lmbar_b),
+              data = dw_dat_summ,
+              family = gaussian(link = 'identity'),
+              iter = 1000,
+              thin = 1,
+              file_refit = 'on_change',
+              file = here("data/models/N_M_nwt")
+              )
+
+# 
+
+dw_dat_summ %>% 
+data_grid(lmbar_n = seq_range(lmbar_n, n = 51)) %>%
+  add_epred_draws(N_M_nwt, ndraws = 100) %>% 
+  ggplot()+
+  geom_point(data = dw_dat_summ, aes(x = lmbar_n, y = ln_tot, color = site_id))+
+  geom_line(aes(x = lmbar_n, y = .epred, group = .draw), alpha = 0.1)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(8, 17), expand = c(0,0), breaks = seq.int(8,17, by = 2), labels = format(10^seq.int(8,17, by = 2), scientific = TRUE))+
+  scale_x_continuous(name = expression(log[10]*"("*bar(M)["abun-weighted"]*")"), limits = c(-3,6), breaks = seq.int(-3,6, by = 2), labels = scales::scientific(10^seq.int(-3,6, by = 2)))+
+  theme(legend.position = 'none')
+
+
+dw_dat_summ %>% 
+data_grid(lmbar_b = seq_range(lmbar_b, n = 51)) %>%
+  add_epred_draws(N_M_bwt, ndraws = 100) %>% 
+  ggplot()+
+  # stat_lineribbon(aes(y = .epred, ))+
+  geom_point(data = dw_dat_summ, aes(x = lmbar_b, y = ln_tot, color = site_id))+
+  geom_line(aes(x = lmbar_b, y = .epred, group = .draw), alpha = 0.1)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(8, 17), expand = c(0,0), breaks = seq.int(8,17, by = 2), labels = format(10^seq.int(8,17, by = 2), scientific = TRUE))+
+  scale_x_continuous(name = expression(log[10]*"("*bar(M)["biomass-weighted"]*")"), limits = c(-2,12), breaks = seq.int(-2,12, by = 2), labels = scales::scientific(10^seq.int(-2,12, by = 2)))+
+  theme(legend.position = 'none')
+
+
+## relationships with temperature
+N_mat = brm(bf(ln_tot~1 + mat_s + I(mat_s^2)), 
+            data = dw_dat_summ,
+            family = gaussian(link = 'identity'),
+            iter = 1000,
+            thin = 1, 
+            file_refit = 'on_change',
+            file = here("data/models/N_mat_gam"))
+
+dw_dat_summ %>% 
+  data_grid(mat_s = seq_range(mat_s, n = 51)) %>% 
+  add_epred_draws(N_mat, ndraws= 100) %>% 
+  ggplot()+
+  geom_line(aes(x = mat_s, y = .epred, group = .draw), alpha = .1)+
+  geom_point(data = dw_dat_summ, aes(x = mat_s, y = ln_tot, color = site_id), size = 2)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(8, 17), expand = c(0,0), breaks = seq.int(8,17, by = 2), labels = format(10^seq.int(8,17, by = 2), scientific = TRUE))+
+  scale_x_continuous(name = "mat_s")+
+  theme(legend.position = 'none')
+
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = mat_s, y = ln_tot))+
+  geom_smooth(aes(x = mat_s, y = ln_tot), se = FALSE)
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = mat_s, y = log10(b_m2)))+
+  geom_smooth(aes(x = mat_s, y = log10(b_m2)), se = FALSE)
+
+
+## relationships with gpp
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_gpp_s, y = ln_tot))+
+  geom_smooth(aes(x = log_gpp_s, y = ln_tot), se = FALSE)
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_gpp_s, y = log10(b_m2)))+
+  geom_smooth(aes(x = log_gpp_s, y = log10(b_m2)), se = FALSE)
+
+## relationship with om
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_om_s, y = ln_tot))+
+  geom_smooth(aes(x = log_om_s, y = ln_tot), se = FALSE)
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_om_s, y = log10(b_m2)))+
+  geom_smooth(aes(x = log_om_s, y = log10(b_m2)), se = FALSE)
+
+# relationship of Mbar with mat
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = mat_s, y = lmbar_n))+
+  geom_smooth(aes(x = mat_s, y = lmbar_n), se=FALSE)
+
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = mat_s, y = lmbar_b))+
+  geom_smooth(aes(x = mat_s, y = lmbar_b), se=FALSE)
+
+# relationship of Mbar with mat
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_gpp_s, y = lmbar_n))+
+  geom_smooth(aes( x = log_gpp_s, y = lmbar_n), se = FALSE)
+
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_gpp_s, y = lmbar_b))+
+  geom_smooth(aes(x = log_gpp_s, y = lmbar_b), se = FALSE)
+
+# relationship of Mbar with mat
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_om_s, y = lmbar_n))+
+  geom_smooth(aes(x = log_om_s, y = lmbar_n), se = FALSE)
+
+
+dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = log_om_s, y = lmbar_b))+
+  geom_smooth(aes(x = log_om_s, y = lmbar_b), se = FALSE)
+
+
+```
+
+
+
+
+
+
