@@ -54,64 +54,74 @@ dw_dat_summ = dw_dat %>%
 ```{r models}
 ## calculate the bayesian linear regression
 
-N_M_nwt = brm(bf(ln_tot~lmbar_n),
+output = capture.output(brm(bf(ln_tot~lmbar_n),
               data = dw_dat_summ,
               family = gaussian(link = 'identity'),
               iter = 1000,
               thin = 1,
               file_refit = 'on_change',
-              file = here("data/models/N_M_nwt")
+              file = here("data/models/N_M_nwt"),
+              chains = 4, cores = 4,
+              seed = 1312
               )
+)
+NM_nwt = readRDS(here("data/models/N_M_nwt.rds"))
+# N_M_nwt_lm = lm(log10(n_tot)~log10(mbar_n), data = dw_dat_summ)
+# 
+# summary(N_M_nwt_lm)
 
-N_M_nwt_lm = lm(log10(n_tot)~log10(mbar_n), data = dw_dat_summ)
 
-summary(N_M_nwt_lm)
-
-
-N_M_bwt = brm(bf(ln_tot~lmbar_b),
+output = capture.output(brm(bf(ln_tot~lmbar_b),
               data = dw_dat_summ,
               family = gaussian(link = 'identity'),
               iter = 1000,
               thin = 1,
               file_refit = 'on_change',
-              file = here("data/models/N_M_nwt")
-              )
-
+              file = here("data/models/N_M_bwt"),
+              chains = 4, cores = 4,
+              seed = 1312
+              ))
+NM_bwt = readRDS(here("data/models/N_M_bwt.rds"))
 # 
 
 dw_dat_summ %>% 
 data_grid(lmbar_n = seq_range(lmbar_n, n = 51)) %>%
-  add_epred_draws(N_M_nwt, ndraws = 100) %>% 
+  add_epred_draws(NM_nwt, ndraws = 100) %>% 
   ggplot()+
   geom_point(data = dw_dat_summ, aes(x = lmbar_n, y = ln_tot, color = site_id))+
   geom_line(aes(x = lmbar_n, y = .epred, group = .draw), alpha = 0.1)+
   scale_color_viridis(discrete = TRUE)+
-  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(8, 17), expand = c(0,0), breaks = seq.int(8,17, by = 2), labels = format(10^seq.int(8,17, by = 2), scientific = TRUE))+
-  scale_x_continuous(name = expression(log[10]*"("*bar(M)["abun-weighted"]*")"), limits = c(-3,6), breaks = seq.int(-3,6, by = 2), labels = scales::scientific(10^seq.int(-3,6, by = 2)))+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(3.5, 7), expand = c(0,0), breaks = seq.int(3.5,7, by = 2), labels = format(10^seq.int(3.5,7, by = 2), scientific = TRUE))+
+  scale_x_continuous(name = expression(log[10]*"("*bar(M)["abun-weighted"]*")"), limits = c(-1,2.5), breaks = seq.int(-1,2.5, by = 2), labels = scales::scientific(10^seq.int(-1,2.5, by = 2)))+
   theme(legend.position = 'none')
 
 
 dw_dat_summ %>% 
 data_grid(lmbar_b = seq_range(lmbar_b, n = 51)) %>%
-  add_epred_draws(N_M_bwt, ndraws = 100) %>% 
+  add_epred_draws(NM_bwt, ndraws = 100) %>% 
   ggplot()+
   # stat_lineribbon(aes(y = .epred, ))+
   geom_point(data = dw_dat_summ, aes(x = lmbar_b, y = ln_tot, color = site_id))+
   geom_line(aes(x = lmbar_b, y = .epred, group = .draw), alpha = 0.1)+
   scale_color_viridis(discrete = TRUE)+
-  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(8, 17), expand = c(0,0), breaks = seq.int(8,17, by = 2), labels = format(10^seq.int(8,17, by = 2), scientific = TRUE))+
-  scale_x_continuous(name = expression(log[10]*"("*bar(M)["biomass-weighted"]*")"), limits = c(-2,12), breaks = seq.int(-2,12, by = 2), labels = scales::scientific(10^seq.int(-2,12, by = 2)))+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(3, 8), expand = c(0,0), breaks = seq.int(3,8, by = 2), labels = format(10^seq.int(3,8, by = 2), scientific = TRUE))+
+  scale_x_continuous(name = expression(log[10]*"("*bar(M)["biomass-weighted"]*")"), limits = c(-1,5), breaks = seq.int(-1,5, by = 2), labels = scales::scientific(10^seq.int(-1,5, by = 2)))+
   theme(legend.position = 'none')
 
 
 ## relationships with temperature
-N_mat = brm(bf(ln_tot~1 + mat_s + I(mat_s^2)), 
+output = capture.output(brm(bf(ln_tot~1 + mat_s + I(mat_s^2)), 
             data = dw_dat_summ,
             family = gaussian(link = 'identity'),
             iter = 1000,
             thin = 1, 
             file_refit = 'on_change',
-            file = here("data/models/N_mat_gam"))
+            file = here("data/models/N_mat_gam"),
+            chains = 4, cores = 4,
+            seed = 1312
+            ))
+
+N_mat = readRDS(here("data/models/N_mat_gam.rds"))
 
 dw_dat_summ %>% 
   data_grid(mat_s = seq_range(mat_s, n = 51)) %>% 
@@ -120,20 +130,33 @@ dw_dat_summ %>%
   geom_line(aes(x = mat_s, y = .epred, group = .draw), alpha = .1)+
   geom_point(data = dw_dat_summ, aes(x = mat_s, y = ln_tot, color = site_id), size = 2)+
   scale_color_viridis(discrete = TRUE)+
-  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(8, 17), expand = c(0,0), breaks = seq.int(8,17, by = 2), labels = format(10^seq.int(8,17, by = 2), scientific = TRUE))+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(3, 8), expand = c(0,0), breaks = seq.int(3,8, by = 2), labels = format(10^seq.int(3,8, by = 2), scientific = TRUE))+
   scale_x_continuous(name = "mat_s")+
   theme(legend.position = 'none')
 
+output = capture.output(brm(bf(log10(b_m2)~1 + mat_s + I(mat_s^2)), 
+            data = dw_dat_summ,
+            family = gaussian(link = 'identity'),
+            iter = 1000,
+            thin = 1, 
+            file_refit = 'on_change',
+            file = here("data/models/B_mat_gam"),
+            chains = 4, cores = 4,
+            seed = 1312
+            ))
+
+B_mat = readRDS(here("data/models/B_mat_gam.rds"))
 
 dw_dat_summ %>% 
+  data_grid(mat_s = seq_range(mat_s, n = 51)) %>% 
+  add_epred_draws(B_mat, ndraws= 100) %>% 
   ggplot()+
-  geom_point(aes(x = mat_s, y = ln_tot))+
-  geom_smooth(aes(x = mat_s, y = ln_tot), se = FALSE)
-
-dw_dat_summ %>% 
-  ggplot()+
-  geom_point(aes(x = mat_s, y = log10(b_m2)))+
-  geom_smooth(aes(x = mat_s, y = log10(b_m2)), se = FALSE)
+  geom_line(aes(x = mat_s, y = .epred, group = .draw), alpha = .1)+
+  geom_point(data = dw_dat_summ, aes(x = mat_s, y = log10(b_m2), color = site_id), size = 2)+
+  scale_color_viridis(discrete = TRUE)+
+  scale_y_continuous(name = expression(log[10]*"(B)"), limits = c(2, 6), expand = c(0,0), breaks = seq.int(2,6, by = 2), labels = format(10^seq.int(2,6, by = 2), scientific = TRUE))+
+  scale_x_continuous(name = "mat_s")+
+  theme(legend.position = 'none')
 
 
 ## relationships with gpp
