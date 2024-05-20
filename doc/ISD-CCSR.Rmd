@@ -13,7 +13,13 @@ here::i_am("doc/ISD-CCSR.Rmd")
 
 ## Purpose
 
-Start the initial analysis combining ISD, CCSR, and LSD relationships across the NEON sites
+Start the initial analysis combining ISD, CCSR, and LSD relationships across the NEON sites. This is initial fodder for discussion of next steps.
+
+## Introduction
+
+The negative relationship 
+
+
 
 ```{r load data}
 library(here)
@@ -49,6 +55,12 @@ dw_dat_summ = dw_dat %>%
   ungroup %>% 
   left_join(dw_dat %>% ungroup %>% select(site_id, gpp, log_gpp_s, log_om_s, mat_s) %>% distinct(), by = 'site_id')
 
+# read in lambdas by sample_id
+lambdas = read_csv(here("data/post_sample_lambdas.csv")) %>% 
+  select(sample_id, lambda_med = '.epred', lower_lambda = '.lower', upper_lambda = '.upper') 
+
+dw_dat_summ = merge(dw_dat_summ, lambdas, by = 'sample_id', all = TRUE) 
+
 ```
 
 ```{r models}
@@ -66,9 +78,11 @@ output = capture.output(brm(bf(ln_tot~lmbar_n),
               )
 )
 NM_nwt = readRDS(here("data/models/N_M_nwt.rds"))
-# N_M_nwt_lm = lm(log10(n_tot)~log10(mbar_n), data = dw_dat_summ)
-# 
-# summary(N_M_nwt_lm)
+NM_nwt_int =fixef(NM_nwt)[1,'Estimate']
+
+NM_nwt_pred = dw_dat_summ %>% 
+  data_grid(lmbar_n = seq_range(lmbar_n, n = 51)) %>% 
+  mutate(pred = NM_nwt_int + lmbar_n*-1)
 
 
 output = capture.output(brm(bf(ln_tot~lmbar_b),
@@ -82,32 +96,73 @@ output = capture.output(brm(bf(ln_tot~lmbar_b),
               seed = 1312
               ))
 NM_bwt = readRDS(here("data/models/N_M_bwt.rds"))
-# 
+NM_bwt_int =fixef(NM_bwt)[1,'Estimate']
 
+NM_bwt_pred = dw_dat_summ %>% 
+  data_grid(lmbar_b = seq_range(lmbar_b, n = 51)) %>% 
+  mutate(pred = NM_bwt_int + lmbar_b*-1)
+
+```
+
+
+
+
+```{r N-Mn plot, fig.cap='Figure 1. The scaling of community abundances by community abundance-weighted body size across the NEON streams.'}
 dw_dat_summ %>% 
 data_grid(lmbar_n = seq_range(lmbar_n, n = 51)) %>%
   add_epred_draws(NM_nwt, ndraws = 100) %>% 
   ggplot()+
+  geom_line(data = NM_nwt_pred, aes(x = lmbar_n, y = pred), linewidth = 1.1, linetype = 'dotted', color = 'darkgrey')+
   geom_point(data = dw_dat_summ, aes(x = lmbar_n, y = ln_tot, color = site_id))+
   geom_line(aes(x = lmbar_n, y = .epred, group = .draw), alpha = 0.1)+
   scale_color_viridis(discrete = TRUE)+
-  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(3.5, 7), expand = c(0,0), breaks = seq.int(3.5,7, by = 2), labels = format(10^seq.int(3.5,7, by = 2), scientific = TRUE))+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(3, 7), expand = c(0,0), breaks = seq.int(3,7, by = 2), labels = format(10^seq.int(3,7, by = 2), scientific = TRUE))+
   scale_x_continuous(name = expression(log[10]*"("*bar(M)["abun-weighted"]*")"), limits = c(-1,2.5), breaks = seq.int(-1,2.5, by = 2), labels = scales::scientific(10^seq.int(-1,2.5, by = 2)))+
   theme(legend.position = 'none')
+```
 
+```{r N-Mb plot,fig.cap='Figure 2. The scaling of community abundances by community biomass-weighted body size across the NEON streams.'}
 
 dw_dat_summ %>% 
 data_grid(lmbar_b = seq_range(lmbar_b, n = 51)) %>%
   add_epred_draws(NM_bwt, ndraws = 100) %>% 
   ggplot()+
-  # stat_lineribbon(aes(y = .epred, ))+
+  geom_line(data = NM_bwt_pred, aes(x = lmbar_b, y = pred), linewidth = 1.1, linetype =   'dotted', color = 'darkgrey')+
   geom_point(data = dw_dat_summ, aes(x = lmbar_b, y = ln_tot, color = site_id))+
   geom_line(aes(x = lmbar_b, y = .epred, group = .draw), alpha = 0.1)+
   scale_color_viridis(discrete = TRUE)+
   scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(3, 8), expand = c(0,0), breaks = seq.int(3,8, by = 2), labels = format(10^seq.int(3,8, by = 2), scientific = TRUE))+
   scale_x_continuous(name = expression(log[10]*"("*bar(M)["biomass-weighted"]*")"), limits = c(-1,5), breaks = seq.int(-1,5, by = 2), labels = scales::scientific(10^seq.int(-1,5, by = 2)))+
   theme(legend.position = 'none')
+```
 
+
+```{r residual analysis}
+
+NMbarN_res = residuals(NM_nwt) %>%  data.frame %>% select(NMnwt_res = 'Estimate', NMnwt_2.5 = 'Q2.5', NMnwt_97.5 = 'Q97.5')
+NMbarB_res = residuals(NM_bwt) %>% data.frame %>% select(NMbwt_res = 'Estimate', NMbwt_2.5 = 'Q2.5', NMbwt_97.5 = 'Q97.5')
+
+dw_dat_summ = dw_dat_summ %>% bind_cols(NMbarN_res) %>% bind_cols(NMbarB_res)
+
+isd_NMnwt_plot = dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = NMnwt_res, y = lambda_med, color = site_id))+
+  scale_color_viridis(discrete = TRUE)+
+  labs(subtitle = expression("N-"*M['abun-weighted']))+
+  theme(legend.position = 'none')
+
+isd_NMbwt_plot = dw_dat_summ %>% 
+  ggplot()+
+  geom_point(aes(x = NMbwt_res, y = lambda_med, color = site_id))+
+  scale_color_viridis(discrete = TRUE)+
+  labs(subtitle = expression("N-"*M['biomass-weighted']))+
+  theme(legend.position = 'none')
+
+gridExtra::grid.arrange(isd_NMnwt_plot, isd_NMbwt_plot, ncol =1)
+
+```
+
+```{r env plots}
 
 ## relationships with temperature
 output = capture.output(brm(bf(ln_tot~1 + mat_s + I(mat_s^2)), 
@@ -157,7 +212,19 @@ dw_dat_summ %>%
   scale_y_continuous(name = expression(log[10]*"(B)"), limits = c(2, 6), expand = c(0,0), breaks = seq.int(2,6, by = 2), labels = format(10^seq.int(2,6, by = 2), scientific = TRUE))+
   scale_x_continuous(name = "mat_s")+
   theme(legend.position = 'none')
+```
 
+```{r isd-ccsr}
+# dw_dat_summ %>% 
+#   ggplot()+
+#   geom_point(aes(x = ))
+
+```
+
+
+
+
+```{r N and B models}
 
 ## relationships with gpp
 dw_dat_summ %>% 
