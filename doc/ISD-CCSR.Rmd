@@ -126,6 +126,9 @@ dw_dat_summ %>%
 ```{r N-Mn plot, fig.cap='Figure 1. The scaling of community abundances by community abundance-weighted body size across the NEON streams.'}
 
 # create label vector for scaled breaks. s 
+lntot_s_labels = format(signif(10^(seq.int(-3,3)*sd(dw_dat_summ$ln_tot) + mean(dw_dat_summ$ln_tot)),1), scientific = TRUE)
+
+lmbar_n_s_labels = format(signif(10^(seq.int(-3,3)*sd(dw_dat_summ$lmbar_n) + mean(dw_dat_summ$lmbar_n)),1), scientific = TRUE)
 
 dw_dat_summ %>% 
 data_grid(lmbar_n_s = seq_range(lmbar_n_s, n = 51)) %>%
@@ -136,12 +139,13 @@ data_grid(lmbar_n_s = seq_range(lmbar_n_s, n = 51)) %>%
   geom_line(aes(x = lmbar_n_s, y = .epred, group = .draw), alpha = 0.1)+
   geom_smooth(data = dw_dat_summ, aes(x = lmbar_n_s, y = ln_tot_s), se = FALSE, method = 'gam')+
   scale_color_viridis(discrete = TRUE)+
-  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(-3.5, 3.5), expand = c(0,0), breaks = seq.int(-3,3, by = 2))+#, labels = format(10^seq.int(3,7, by = 2), scientific = TRUE))+
-  scale_x_continuous(name = expression(log[10]*"("*bar(M)["abun-weighted"]*")"), limits = c(-3,4.51), breaks = seq.int(-3,3, by = 2))+#, labels = scales::scientific(10^seq.int(-1,2.5, by = 2)))+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(-3.5, 3.5), expand = c(0,0), breaks = seq.int(-3,3, by = 1), labels = lntot_s_labels)+
+  scale_x_continuous(name = expression(log[10]*"("*bar(M)["abun-weighted"]*")"), limits = c(-3,4.51), breaks = seq.int(-3,3, by = 1), labels = lmbar_n_s_labels)+
   theme(legend.position = 'none')
 ```
 
 ```{r N-Mb plot,fig.cap='Figure 2. The scaling of community abundances by community biomass-weighted body size across the NEON streams.'}
+lmbar_b_s_labels = format(signif(10^(seq.int(-3,3)*sd(dw_dat_summ$lmbar_b) + mean(dw_dat_summ$lmbar_b)),1), scientific = TRUE)
 
 dw_dat_summ %>% 
 data_grid(lmbar_b_s = seq_range(lmbar_b_s, n = 51)) %>%
@@ -152,8 +156,8 @@ data_grid(lmbar_b_s = seq_range(lmbar_b_s, n = 51)) %>%
   geom_line(aes(x = lmbar_b_s, y = .epred, group = .draw), alpha = 0.1)+
   geom_smooth(data = dw_dat_summ, aes(x = lmbar_b_s, y = ln_tot_s), se = FALSE, method = 'gam')+
   scale_color_viridis(discrete = TRUE)+
-  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(-3, 3), expand = c(0,0), breaks = seq.int(-3,3, by = 2))+#, labels = format(10^seq.int(3,8, by = 2), scientific = TRUE))+
-  scale_x_continuous(name = expression(log[10]*"("*bar(M)["biomass-weighted"]*")"), limits = c(-3.5,3), breaks = seq.int(-3,3, by = 2))+#, labels = scales::scientific(10^seq.int(-1,5, by = 2)))+
+  scale_y_continuous(name = expression(log[10]*"(N)"), limits = c(-3, 3), expand = c(0,0), breaks = seq.int(-3,3, by = 1), labels = lntot_s_labels)+
+  scale_x_continuous(name = expression(log[10]*"("*bar(M)["biomass-weighted"]*")"), limits = c(-3.5,3), breaks = seq.int(-3,3, by = 1), labels = lmbar_b_s_labels)+
   theme(legend.position = 'none')
 ```
 
@@ -223,13 +227,14 @@ output = capture.output(brm(bf(resid_theory~lambda_med+(1|site_id)),
                             file_refit = 'on_change',
                             file = here("data/models/NM_nwt_theory"),
                             chains = 4, cores = 4,
-                            seed = 1312
+                            seed = 1312,
+                            
                             ))
 
 NMnwt_res_theo = readRDS(here("data/models/NM_nwt_theory.rds"))
 
 isd_NMnwt_plot = NM_nwt_pred %>% 
-  add_epred_draws(NMnwt_res_theo, ndraws = 100) %>% 
+  add_epred_draws(NMnwt_res_theo, re_formula = NA, ndraws = 100) %>% 
   ggplot()+
   geom_line(aes(x = lambda_med, y = .epred, group = .draw), alpha = 0.1)+
   geom_point(aes(x = lambda_med, y = resid_theory, color = site_id))+
@@ -248,8 +253,9 @@ output = capture.output(brm(bf(resid_theory~lambda_med+(1|site_id)),
                             seed = 1312
                             ))
 NMbwt_res_theo = readRDS(here("data/models/NM_bwt_theory.rds"))
+
 isd_NMbwt_plot = NM_bwt_pred %>% 
-  add_epred_draws(NMbwt_res_theo, ndraws = 100) %>% 
+  add_epred_draws(NMbwt_res_theo, re_formula = NA,ndraws = 100) %>% 
   ggplot()+
   geom_line(aes(x = lambda_med, y = .epred, group = .draw), alpha = 0.1)+
   geom_point(aes(y = resid_theory, x = lambda_med, color = site_id))+
