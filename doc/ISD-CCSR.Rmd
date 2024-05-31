@@ -146,7 +146,7 @@ To explore drivers of over- or under-yielding,
 
 
 
-```{r N-Mn plot, fig.cap='Figure 1. The scaling of community abundances by community mean body size across the NEON streams. Transparent grey lines represent a random sample of posterior draws from a linear model (n = 100), while the dotted line represents the relationship predicted by theory, $N ~ M^-0.75$. The linear model was fit on centered and scaled data and axis back-transformed to the original scale. The inset shows the predicted site-specific relationships between community abundance and mean body size from the mixed-effects model.'}
+```{r N-Mn plot, fig.cap='Figure 1. The scaling of community abundances by community mean body size across the NEON streams. Transparent grey lines represent a random sample of posterior draws from a linear model (n = 100), while the dotted line represents the relationship predicted by theory, $N ~ \\overline{M^{-0.75}}$. The linear model was fit on centered and scaled data and axis back-transformed to the original scale. The inset shows the predicted site-specific relationships between community abundance and mean body size from the mixed-effects model.'}
 
 # create label vector for scaled breaks. s 
 lntot_s_labels = format(signif(10^(seq.int(-3,3)*sd(dw_dat_summ$ln_tot) + mean(dw_dat_summ$ln_tot)),1), scientific = TRUE)
