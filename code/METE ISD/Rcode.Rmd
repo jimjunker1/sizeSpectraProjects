@@ -4,6 +4,7 @@ author: "Meng Xu"
 date: "November 07, 2019"
 output: html_document
 ---
+
 # Upload packages, function and data
 ```{r}
 library(tidyverse)
@@ -97,8 +98,11 @@ alltree_csub = alltree %>% filter(subplot=="C")  # take the alive trees in the c
 bci_2015 = read.csv("BCI2015.csv",header=T)
 bci_2015_live = bci_2015 %>% filter(Status=="alive")
 ```
+
 # Models for the community-wide individual size distribution (ISD)
+
 ## Parametrized METE (approximate and partially-parametrized community-constrained interspecific metabolic scaling): first solve an approximation of beta using 7.27 (a simplified version of eqn 7.19) in Harte (2011), then use b=2 as the initial guess for the maximum likelihood estimate of b via community-wide ISD
+
 ```{r}
 # BCI plot
 (S_0 = length(unique(bci_2015_live$Latin)))  # total number of species
@@ -202,8 +206,11 @@ qmete_ci = bci_2015_live %>% group_by(Quadrat) %>%
 # quantile(L1_com_boot, c(.025, .5, .975),na.rm=T)
 # quantile(L2_com_boot, c(.025, .5, .975),na.rm=T)
 ```
+
 ## Phenomenological models of community individual size distribution (from Muller-Landau et al. (2006))
+
 ### 1. left-truncated exponential distribution
+
 ```{r}
 # BCI
 negLL_com_exp = function(par,x,xmin,n){
