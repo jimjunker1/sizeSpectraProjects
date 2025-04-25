@@ -1,4 +1,5 @@
 # extract all chironomidae and detect best model to predict size distribution within a date
+library(univariateML)
 library(junkR)
 library(tidyverse)
 library(brms)
@@ -7,6 +8,7 @@ library(utils)
 library(readxl)
 '%ni%' <- Negate('%in%')
 rstan::rstan_options(auto_write = TRUE)
+theme_set(theme_minimal())
 
 ## load in Iceland data 
 stream_taxon_bodysize = readRDS("./data/stream_taxon_bodysize.rds") %>% bind_rows()
@@ -65,7 +67,12 @@ chiro_bodysizes =hengill_bodysizes %>%
 
 chiro_bodysizes %>% 
   ggplot()+
-  geom_density(aes(x = log(MASS), group = interaction(SITE,DATE), color = interaction(SITE,DATE)))
+  geom_density(aes(x = log(MASS), y = after_stat(scaled), group = interaction(SITE,DATE), color = interaction(SITE,DATE)))
+
+chiroMList = chiro_bodysizes %>% 
+  named_group_split(SITE,DATE) %>% 
+  map(~model_select(.x$MASS, models = c("gamma","norm","lnorm","nbinom","pareto","power"), return = 'all'))
+  
 
 ## west blacktail creek
 #DD87:EJ207
